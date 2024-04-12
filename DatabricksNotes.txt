@@ -1,0 +1,50 @@
+DATABRCIKS NOTES:
+
+Magic commands:
+1. %md   (mark down)
+2. %fs   (filesystem)
+3. %sh   (shell)
+
+1 %md: used for making document view Ex: Headers ect. reference - https://www.markdownguide.org
+
+2 %fs: used to get files path
+ls
+
+3 %sh: 
+ps    - to check process running
+-------------------------------------------------------------------
+4. dbutils
+syntax- dbutils.fs('/')  - for checking root folders
+
+for files in dbutils.fs('/path')
+	if files.name.endwith('/')
+		print(files.name
+		
+dbutils.help() - to see diff funs
+-------------------------------------------------------------------
+
+Access Azure Data Lake Using acess Keys:
+1. Set the spark fs.azure.account.key
+2. List files from demo container
+3. Read data from csv.file
+
+
+Syntax:
+
+#Set the spark fs.azure.account.key
+spark.conf.set("fs.azure.key.storage_account_name.dfs.core.windows.net", "AccessKey")
+ 
+#List files from demo container
+display(dbutils.fs.ls("abfss://container_name@storage_account_name.dfs.core.windows.net"))
+
+#Read data from csv.file
+display(spark.read.csv("path"))  -- here path we will get in above command
+
+------------------------------------------------------------------------
+
+Git start
+
+
+
+
+
