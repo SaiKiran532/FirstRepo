@@ -42,13 +42,6 @@ display(spark.read.csv("path"))  -- here path we will get in above command
 
 ------------------------------------------------------------------------
 
-Git start
-
-Git End
-
-Git Changes 
-
-Git branch test
 
 
 
