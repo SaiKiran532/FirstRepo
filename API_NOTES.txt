@@ -1,0 +1,18 @@
+API testing notes:
+
+Types of requests:
+1.GET
+2.POST
+3.PUT
+4.DELETE
+
+1.GET: GET request will fetch the data from server and present the same data to the user.
+
+2.POST: Will go and create new resource into the server
+
+3.PUT: We can create new resource or we can update the existing resource
+
+4.DELETE: Will go and delete the resource
+
+---------------------------------------------------------------------------------------------------
+

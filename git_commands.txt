@@ -1,0 +1,51 @@
+
+
+"Goto path of project in file explorer and right click and open with Git bash"  
+-------------------------------------------------------------------------------- 
+-->git config --global user.name "Your user_name"
+-->git config --global user.email "Your email_add" 
+
+1.For creating local repository
+-->git init
+
+2.To add all the files to local repository (staging area)
+-->git add -A
+
+3.commit the code into local repository
+-->git commit -m "first commit"
+
+4.To check status that what are the files are there in local repository
+-->git status
+
+5.To connect local repository to github repository
+-->git remote add origin https://github.com/SaiKiran532/SauseDemoWebApp.git
+
+---------------------------------------------------
+flow: {code - staging area - github(Hosting area)} |
+--------------------------------------------------- 
+
+  
+6.To push the code from git to github repository
+-->git push -u origin master
+--------------------------------------------------------------------------------------
+
+  To pull the github repository files to local repository
+-->git pull 
+
+--------------------------------------------------------------------------------------
+  If we did some changes to the newly added file in our local and want push it to
+  github repository again need to follow same steps
+-->git init
+-->git status
+-->git add -A
+-->git commit -m "second commit"
+-->git push -u origin master
+
+
+
+
+
+
+
+
+https://github.com/SaiKiran532/SauseDemoWebApp.git
