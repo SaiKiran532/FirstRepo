@@ -1,0 +1,290 @@
+import allure
+import pytest
+import datetime
+from automation_tests.base.utilities import helper
+from automation_tests.tests.config import CONFIG_USER
+import pandas
+from automation_tests.tests.integration_tests.result_config import GlOSSARY_FILE
+
+
+@pytest.fixture(scope='class', autouse=True)
+def prepare(shell):
+    shell.navigate('home/category_performance')
+
+
+@allure.epic("Home")
+@allure.feature('Category Performance')
+@allure.link(
+    url="https://kelloggcompany-my.sharepoint.com/:x:/r/personal/pranav_katta_kellogg_com/_layouts/15/Doc.aspx?sourcedoc=%7B874F16FF-3169-45C4-BCD8-47709153ACA9%7D&file=KPS%20Test%20Cases.xlsx&action=default&mobileredirect=true&wdsle=0",
+    name="KPS+ Test cases")
+@allure.label("owner", "Soni kumari")
+class TestCategoryPerformance(object):
+
+    @allure.testcase("TC006")
+    @allure.title('Home -  Category Performance')
+    @allure.description("Verify Home Category Performance")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_category_performance(self, shell):
+        res = shell.filters()
+        assert res == {'Category': 'RTEC',
+                       'Manufacturers': 'All',
+                       'Brands': 'All',
+                       'Products': 'All',
+                       'Channels': 'All',
+                       'Time Period': '52 Weeks (27 Mar 2023 - 25 Mar 2024)'}
+        kpi = shell.kpi_cards()
+        assert kpi == ['Total Value\n¥50.8B\n0.2 %\nPast Period %',
+                       'Volume in units\n130.79M\n-6.4 %\nPast Period %',
+                       'Volume in KG\n46.19M\n-7.7 %\nPast Period %',
+                       'Average Price per KG\n¥1.1K\n8.6 %\nPast Period %']
+
+    @allure.testcase("TC007")
+    @allure.title('Home -  Category Performance - tooltip')
+    @allure.description("Verify Category performance tooltip")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_navigate_tooltip(self, shell):
+        res = shell.top_navigate_tooltip('Category Performance')
+        assert res == 'At a brand level understand Kellogg\'s market position against other competitors in the category.'
+
+    @allure.testcase("TC008")
+    @allure.title('Home -  Category Performance - Share')
+    @allure.description("Verify share button")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_share(self, shell):
+        shared_link = shell.share()
+        toast_message = shell.close_alert()
+        assert shared_link == CONFIG_USER['home_page'] + '/categoryperformance'
+        assert toast_message == 'Copied current page link'
+
+    @allure.testcase("TC009")
+    @allure.title('Home -  Category Performance - Download')
+    @allure.description("Verify Download button")
+    @allure.severity(allure.severity_level.NORMAL)
+    # @pytest.mark.parametrize("file_type", ["PDF", "XLSX", "CSV"], ids=["pdf", "xls", "csv"])
+    def test_download(self, shell, download_dir):
+        file_type = 'PDF'
+        shell.download(file_type)
+        current_time = datetime.datetime.now()
+        current_date_time = current_time.strftime("%d_%m_%Y_%H_%M_")
+        expected_res = 'Category Performance - ' + str(current_date_time)
+        assert helper.is_file_downloaded(download_dir, expected_res, file_type.lower())
+        # helper.delete_files_in_directory(download_dir)
+
+    @allure.testcase("TC010")
+    @allure.title('Home -  Category Performance - Save')
+    @allure.description("Verify Save button")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_save(self, shell):
+        res = shell.save()
+        assert res == 'Filters saved successfully'
+
+    @allure.testcase("TC011")
+    @allure.title('Home -  Category Performance - Translation Button')
+    @allure.description("Vefiry Translation button")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_translation(self, shell):
+        shell.translate('Japanese')
+        res = shell.filters()
+        assert res == {'カテゴリー': 'RTEC',
+                       '製造業者': 'すべて',
+                       'ブランド': 'すべて',
+                       '製品': 'すべて',
+                       'チャネル': 'すべて',
+                       '期間': '52 週間 (27 Mar 2023 - 25 Mar 2024)'}
+        shell.translate('English')
+        res = shell.filters()
+        assert res == {'Category': 'RTEC',
+                       'Manufacturers': 'All',
+                       'Brands': 'All',
+                       'Products': 'All',
+                       'Channels': 'All',
+                       'Time Period': '52 Weeks (27 Mar 2023 - 25 Mar 2024)'}
+
+    @allure.testcase("TC012")
+    @allure.title('Home -  Category Performance - Edit Button')
+    @allure.description("Verify Edit button on Category Performance page")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_edit_filters(self, shell):
+        shell.edit_filter(category='SALTY SNACKS',
+                          manufacturers=['KELLOGG', 'CALBEE'],
+                          brands=['CALBEE A LA POTATO (CALBEE)', 'PRINGLES (KELLOGG)'],
+                          channels=['CVS', 'GMS'],
+                          timeperiod='Default',
+                          apply=False)
+        res = shell.filters()
+        assert res == {'Category': 'RTEC',
+                       'Manufacturers': 'All',
+                       'Brands': 'All',
+                       'Products': 'All',
+                       'Channels': 'All',
+                       'Time Period': '52 Weeks (27 Mar 2023 - 25 Mar 2024)'}
+
+    @allure.testcase("TC013")
+    @allure.title('Home -  Category Performance - Select filters ')
+    @allure.description("Verify filter dropdown and checkbox ")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_edit_filters_select(self, shell):
+        shell.edit_filter(category='SALTY SNACKS',
+                          manufacturers=['KADO', 'KOIKEYA'],
+                          brands=['KOIKEYA CHEESE MUCHO (KOIKEYA)', 'KOIKEYA HASHED POTATO (KOIKEYA)'],
+                          channels=['CVS', 'SM'],
+                          timeperiod='Default',
+                          close=True)
+        res = shell.filters()
+        assert res == {'Category': 'RTEC', 'Manufacturers': 'All', 'Brands': 'All', 'Products': 'All',
+                       'Channels': 'All', 'Time Period': '52 Weeks (27 Mar 2023 - 25 Mar 2024)'}
+
+    @allure.testcase("TC018")
+    @allure.title('Home -  Category Performance -no filters -apply')
+    @allure.description("Verify disabled apply button")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_edit_filters_disable_apply(self, shell):
+        with pytest.raises(Exception) as message:
+            shell.edit_filter(manufacturers=[],
+                              apply=True)
+        assert str(message.value) == 'Element does not enabled - Apply Button is disabled'
+
+    @allure.testcase("TC019")
+    @allure.title('Home -  Category Performance - Filters -reset')
+    @allure.description("Verify reset button")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_edit_filters_reset(self, shell):
+        shell.edit_filter(category='SALTY SNACKS',
+                          manufacturers=['KELLOGG', 'CALBEE'],
+                          brands=['CALBEE A LA POTATO (CALBEE)', 'PRINGLES (KELLOGG)'],
+                          channels=['CVS', 'GMS'],
+                          reset=True)
+        res = shell.filters()
+        assert res == {'Category': 'RTEC', 'Manufacturers': 'All', 'Brands': 'All', 'Products': 'All',
+                       'Channels': 'All', 'Time Period': '52 Weeks (27 Mar 2023 - 25 Mar 2024)'}
+
+    @allure.testcase("TC020")
+    @allure.title('Home -  Category Performance - Filters -cancel ')
+    @allure.description("Verify cancel button")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_edit_filters_close(self, shell):
+        shell.edit_filter(category='SALTY SNACKS',
+                          manufacturers=['KELLOGG', 'CALBEE'],
+                          brands=['CALBEE A LA POTATO (CALBEE)', 'PRINGLES (KELLOGG)'],
+                          channels=['CVS', 'GMS'],
+                          close=True, )
+        res = shell.filters()
+        assert res == {'Category': 'RTEC', 'Manufacturers': 'All', 'Brands': 'All', 'Products': 'All',
+                       'Channels': 'All', 'Time Period': '52 Weeks (27 Mar 2023 - 25 Mar 2024)'}
+
+    @allure.testcase("TC014")
+    @allure.title('Home - Category Performance - Select filters ')
+    @allure.description("Verify search filters ")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_edit_filters_search(self, shell):
+        shell.edit_filter(category='SALTY SNACKS',
+                          manufacturers=['KADO', 'KOIKEYA'],
+                          brands=['KOIKEYA CHEESE MUCHO (KOIKEYA)', 'KOIKEYA HASHED POTATO (KOIKEYA)'],
+                          channels=['HC', 'SM'],
+                          timeperiod='Default',
+                          close=True)
+        res = shell.filters()
+        assert res == {'Category': 'RTEC', 'Manufacturers': 'All', 'Brands': 'All', 'Products': 'All',
+                       'Channels': 'All', 'Time Period': '52 Weeks (27 Mar 2023 - 25 Mar 2024)'}
+
+    @allure.testcase("TC017")
+    @allure.title('Home -  Category Performance - Edit Button')
+    @allure.description("Verify apply button")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_edit_filters_apply(self, shell):
+        shell.edit_filter(category='SALTY SNACKS',
+                          manufacturers=['KELLOGG', 'CALBEE'],
+                          brands=['CALBEE A LA POTATO (CALBEE)', 'PRINGLES (KELLOGG)'],
+                          channels=['CVS', 'GMS'],
+                          # timeperiod='Default',
+                          apply=True)
+        res = shell.filters()
+        assert res == {'Category': 'SALTY SNACKS',
+                       'Manufacturers': 'KELLOGG+1 More',
+                       'Brands': 'CALBEE A LA POTA...+1 More',
+                       'Products': 'All',
+                       'Channels': 'CVS+1 More',
+                       'Time Period': '52 Weeks (27 Mar 2023 - 25 Mar 2024)'}
+
+    @allure.testcase("TC021")
+    @allure.title('Home -  Category Performance - KPI visualization')
+    @allure.description("Verify KPI Visualization")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_kpi_cards(self, shell):
+        shell.edit_filter(reset=True)
+        kpi = shell.kpi_cards()
+        assert kpi == ['Total Value\n¥50.8B\n0.2 %\nPast Period %',
+                       'Volume in units\n130.79M\n-6.4 %\nPast Period %',
+                       'Volume in KG\n46.19M\n-7.7 %\nPast Period %',
+                       'Average Price per KG\n¥1.1K\n8.6 %\nPast Period %']
+
+    @allure.testcase("TC022")
+    @allure.title('Home -  Category Performance - KPI visualization- Show full stats')
+    @allure.description("Verify Market Breakdown")
+    @allure.severity(allure.severity_level.MINOR)
+    def test_market_breakdown(self, shell):
+        shell.market_breakdown('Volume in KG')
+
+    @allure.testcase("TC026")
+    @allure.title('Home -  Category Performance - Expand')
+    @allure.description("Verify Expand button")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_expand(self, shell):
+        shell.expand_view()
+
+    @allure.testcase("TC028")
+    @allure.title('Home -  Category Performance - Category decomposition - Glossary')
+    @allure.description("Verify Glossary button")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_glossary(self, shell):
+        res = shell.glossary_view()
+        df = pandas.read_csv(GlOSSARY_FILE, sep="|", encoding='utf-16')
+        assert res.equals(df)
+
+    @allure.testcase("TC037")
+    @allure.title('Home -  Category Performance - Category decomposition - Search Glossary')
+    @allure.description("Verify search Glossary")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_glossary_search(self, shell):
+        res = shell.glossary_view('Value sales')
+        assert res.applymap(lambda cell: 'Value sales').any().any()
+
+    @allure.testcase("TC039")
+    @allure.title('Home -  Category Performance - Save (or) Share')
+    @allure.description("Verify Pop up ")
+    @allure.severity(allure.severity_level.MINOR)
+    def test_close_toast(self, shell):
+        shell.share()
+        toast_message = shell.close_alert()
+        assert toast_message == 'Copied current page link'
+
+    @allure.testcase("TC040")
+    @allure.title('Home -  Category Performance - KPI visualization- Market Breakdown- X Button')
+    @allure.description("Verify Market Breakdown Close Button")
+    @allure.severity(allure.severity_level.MINOR)
+    def test_market_breakdown_close(self, shell):
+        shell.market_breakdown('Total Value')
+
+    @allure.testcase("TC036")
+    @allure.title('Home -  Category Performance -Logout should save filters')
+    @allure.description("Verify Logout should save filters")
+    @allure.severity(allure.severity_level.NORMAL)
+    @pytest.mark.skip(reason='Need to cross verify this test')
+    def test_category_performance_filters(self, shell):
+        shell.edit_filter(reset=True)
+        shell.edit_filter(category='SALTY SNACKS',
+                          manufacturers=['KELLOGG', 'CALBEE'],
+                          brands=['CALBEE A LA POTATO (CALBEE)', 'PRINGLES (KELLOGG)'],
+                          channels=['CVS', 'GMS'],
+                          # timeperiod='Default',
+                          apply=True)
+        shell.save()
+        shell.logout()
+        shell.navigate('home/category_performance')
+        res = shell.filters()
+        assert res == {'Category': 'SALTY SNACKS',
+                       'Manufacturers': 'KELLOGG+1 More',
+                       'Brands': 'CALBEE A LA POTA...+1 More',
+                       'Products': 'All',
+                       'Channels': 'CVS+1 More',
+                       'Time Period': '52 Weeks (27 Mar 2023 - 25 Mar 2024)'}
