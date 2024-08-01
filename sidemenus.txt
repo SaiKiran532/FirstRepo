@@ -1,0 +1,37 @@
+from retrying import retry
+from .home import Home
+from .simulation import Simulation
+from .user_tracking import UserTracking
+from ..locators.locators import Locators
+from .pricing_analytics import PricingAnalytics
+from .media_summary import MediaSummary
+
+
+class SideMenu(Locators):
+
+    def __init__(self, driver):
+        self.driver = driver
+
+    def go(self, path):
+        name = path.split("/")
+        if name[0] == "home":
+            self.driver.click(self.HOME)
+            return Home(self.driver).go(name[1])
+        elif name[0] == "pricing_analytics":
+            self.driver.click(self.PRICING_ANALYTICS)
+            if name[1]:
+                return PricingAnalytics(self.driver).go(name[1])
+            else:
+                return PricingAnalytics(self.driver)
+        elif name[0] == "media_effectiveness":
+            self.driver.click(self.MEDIA_EFFECTIVENESS)
+            return MediaSummary(self.driver)
+        elif name[0] == "user_tracking":
+            self.driver.click(self.USER_TRACKING)
+            return UserTracking(self.driver).go(name[1])
+        elif name[0] == "simulation":
+            self.driver.click(self.SIMULATION)
+            return Simulation(self.driver)
+
+        else:
+            raise NotImplementedError("Not implemented yet")

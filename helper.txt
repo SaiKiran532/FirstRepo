@@ -1,0 +1,65 @@
+import string
+import random
+import base64
+import uuid
+import os
+import time
+EMAIL_GENERATED = []
+
+
+def uuid_base32():
+    return base64.b32encode(uuid.uuid4().bytes).decode("utf-8").rstrip('=\n')
+
+
+def uuid_email():
+    temp = uuid_base32()
+    suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=3))
+    while True:
+        email = temp[:18] + "@" + temp[18:] + "." + suffix
+        if email not in EMAIL_GENERATED:
+            EMAIL_GENERATED.append(email)
+            break
+    return email
+
+
+def create_file(file_path, content=None):
+    with open(file_path, "w") as fp:
+        fp.write(content or "Your text goes here")
+
+
+def encode(message):
+    message_bytes = message.encode('ascii')
+    base64_bytes = base64.b64encode(message_bytes)
+    return base64_bytes.decode('ascii')
+
+
+def decode(message):
+    base64_bytes = message.encode('ascii')
+    message_bytes = base64.b64decode(base64_bytes)
+    return message_bytes.decode('ascii')
+
+
+def csvfile(df, file):
+        df.to_csv(file, index=False, sep="|", encoding='utf-16')
+
+
+def delete_files_in_directory(directory_path):
+   try:
+     files = os.listdir(directory_path)
+     for file in files:
+       file_path = os.path.join(directory_path, file)
+       if os.path.isfile(file_path):
+         os.remove(file_path)
+     print("All files deleted successfully.")
+   except OSError:
+     print("Error occurred while deleting files.")
+
+
+def is_file_downloaded(download_dir, starts_with, ends_with, timeout=20):
+    end_time = time.time() + timeout
+    while time.time() < end_time:
+        for file_name in os.listdir(download_dir):
+            if file_name.startswith(starts_with) and file_name.endswith(ends_with):
+                return True
+        time.sleep(1)  # Wait for 1 second before checking again
+    return False
