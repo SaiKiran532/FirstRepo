@@ -1,0 +1,85 @@
+1. Smoke Test: Will Verify gold table existense & accessbility in Databricks post table creation
+DESC table_name
+-------------------------------------------
+2. Metadata Check: Will Compare Schema Metadata between STTM & Gold table Manually or via Databricks query.
+-------------------------------------------
+3. Job Status Check: Will Moniter the job status in Databricks jobs pipeline dashboard & Review job output logs for errors post-completion of job run.
+-------------------------------------------
+4. Count Validation: Compare Count b/w Source & Target tables
+WITH source_data AS(
+  SELECT * FROM Source_tables
+  ),
+
+target_data AS(
+  SELECT * FROM Target_table
+  )
+
+  SELECT 'SOURCE', COUNT(*)
+    FROM source_data
+  UNION ALL
+   SELECT 'TARGET', COUNT(*)
+    FROM target_data
+-------------------------------------------
+5. Data Validation: Compare Data b/w Source & Target tables
+WITH source_data AS(
+  SELECT * FROM Source_tables
+  ),
+
+target_data AS(
+  SELECT * FROM Target_table
+  )
+
+  SELECT 'SOURCE', *
+    FROM
+    (
+    SELECT *
+    FROM source_data
+  MINUS
+   SELECT *
+    FROM target_data
+    )
+    UNION ALL
+    SELECT 'TARGET', *
+    FROM
+    (
+    SELECT *
+    FROM target_data
+  EXCEPT
+   SELECT *
+    FROM source_data
+    )
+-------------------------------------------
+6. Null Check: Will check Primary key columns should not contain null values
+SELECT COUNT(*) AS NULL_COUNT
+FROM table_name
+WHERE
+  column1 IS NULL OR TRIM(column1) = ''
+  OR column2 IS NULL OR TRIM(column2) = ''
+  
+(OR)
+  
+SELECT column1, column2
+FROM table_name
+WHERE
+  column1 IS NULL OR TRIM(column1) = ''
+  OR column2 IS NULL OR TRIM(column2) = ''
+-------------------------------------------
+7. Duplicate Check: Will check Primary key columns should not contain duplicates
+SELECT column1, column2, COUNT(*) AS Duplicate_Count
+  FROM table_name
+  GROUP BY column1, column2
+    HAVING COUNT(*)>1
+-------------------------------------------
+8. Audit Column Check: Will check Audit columns should not populate nulls
+SELECT DISTINCT XTNMarketCode,
+XTNDFSystemId,
+XTNDReportingUnitId,
+XTNCreatedById,
+XTNUpdatedTime,
+XTNUpdatedById
+  FROM table_name
+-------------------------------------------  
+
+  
+  
+  
