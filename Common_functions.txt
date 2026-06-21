@@ -1,0 +1,209 @@
+import pandas
+import pyperclip
+from bs4 import BeautifulSoup
+from selenium.webdriver import ActionChains
+
+from ..locators.locators import Locators
+from ....base.exceptions.element import ElementDisabledException
+
+
+class CommonFunctionality(Locators):
+
+    def __init__(self, driver):
+        self.driver = driver
+
+    def filters(self):
+        filter_list = {}
+        labels = self.driver.find_all(self.FILTER_LABELS)
+        values = self.driver.find_all(self.FILTER_VALUES)
+        for i, j in zip(labels, values):
+            filter_list[i.text] = j.text
+        return filter_list
+
+    def click_checkbox(self, key, kwargs):
+        self.driver.scroll_into_view(self.CHAECBOX.format(key, 'All'))
+        self.driver.click(self.CHAECBOX.format(key, 'All'))
+        for value in kwargs[key.lower()]:
+            self.driver.input(self.SEARCH_FILTER.format(key), value)
+            self.driver.click(self.CHAECBOX.format(key, value))
+
+    def click_radio(self, key, kwargs):
+        self.driver.click(self.RADIO.format(kwargs[key.lower()]))
+
+    def close_filter(self):
+        self.driver.find(self.FILTER_CLOSE).click()
+
+    def edit_filter(self, apply=False, reset=False, close=False, **kwargs):
+        self.driver.click(self.EDIT_FILTER)
+        for key in kwargs:
+            key = key.title()
+            if key == 'Category':
+                self.driver.click(self.EXPAND.format(key))
+                self.click_radio(key, kwargs)
+            elif key in ('Manufacturers' or 'Manufacturer'):
+                self.driver.click(self.EXPAND.format(key))
+                if key == 'Manufacturer':
+                    self.click_radio(key, kwargs)
+                else:
+                    self.click_checkbox(key, kwargs)
+            elif key in ('Brands' or 'Brand'):
+                self.driver.click(self.EXPAND.format(key))
+                if key == 'Brand':
+                    self.click_radio(key, kwargs)
+                else:
+                    self.click_checkbox(key, kwargs)
+            elif key in ('Products' or 'Product'):
+                self.driver.click(self.EXPAND.format(key))
+                if key == 'Product':
+                    self.click_radio(key, kwargs)
+                else:
+                    self.click_checkbox(key, kwargs)
+            elif key == 'Channels':
+                self.driver.click(self.EXPAND.format(key))
+                self.click_checkbox(key, kwargs)
+            elif key == 'Timeperiod':
+                key = 'Time Period'
+                self.driver.click(self.EXPAND.format(key))
+                self.driver.click(self.RADIO.format(kwargs['timeperiod']))
+            else:
+                raise NotImplementedError
+
+        if reset is True:
+            self.driver.click(self.FILTER_RESET)
+            return self
+        if close is True:
+            self.close_filter()
+            return self
+        if apply is True:
+            if self.driver.get_attribute(self.FILTER_APPLY, attribute='disabled'):
+                self.close_filter()
+                raise ElementDisabledException("Apply Button is disabled")
+            else:
+                self.driver.click(self.FILTER_APPLY)
+        else:
+            self.close_filter()
+
+    def click_top_bar(self):
+        self.driver.click(self.TOP_BAR_OPTIONS)
+
+    def share(self):
+        self.click_top_bar()
+        self.driver.click(self.SHARE)
+        link = pyperclip.paste()
+        return link
+
+    def download(self, file_type):
+        self.click_top_bar()
+        self.driver.click(self.DOWNLOAD)
+        if self.driver.text(self.DROPDOWN_EXISTING_VALUE) != file_type:
+            self.driver.find(self.DOWNLOAD_DROPDOWN).click()
+            self.driver.find(self.TEXT_VALUE.format(file_type)).click()
+        self.driver.click(self.DOWNLOAD_BUTTON)
+        return self
+
+    def close_alert(self):
+        alert_message = self.driver.text(self.ALERT_TEXT)
+        self.driver.click(self.ALERT_CLOSE)
+        return alert_message
+
+    def save(self):
+        self.click_top_bar()
+        self.driver.click(self.SAVE)
+        return self.close_alert()
+
+    def unsave(self):
+        self.click_top_bar()
+        self.driver.click(self.UNSAVE)
+        return self.close_alert()
+
+    def translate(self, language):
+        self.driver.find(self.TRANSLATE_DROPDOWN).click()
+        self.driver.find(self.TEXT_VALUE.format(language)).click()
+
+    def nav_tooltip(self, feature):
+        self.driver.hover(self.TOP_NAV_MENU.format(feature))
+        tooltip_info = self.driver.text(self.NAV_TOOLTIP)
+        return tooltip_info
+
+    def close(self):
+        self.driver.click(self.CLOSE)
+
+    def expand_view(self):
+        self.driver.click(self.EXPAND_VIEW)
+        self.close()
+
+    def glossary_view(self, search):
+        self.driver.click(self.GLOSSARY_BUTTON)
+        if search:
+            self.driver.input(self.GLOSSARY_SEARCH, search)
+        content = self.driver.page_source
+        soup = BeautifulSoup(content)
+        table = soup.select_one("div#glossary_table table.w-full.rounded-md")
+        headers = [header.text for header in table.find_all('th')]
+        rows = table.find_all('tr')
+        data = []
+        for row in rows:
+            cells = row.find_all('td')
+            if cells:
+                data.append([cell.text.strip() for cell in cells])
+        df = pandas.DataFrame(data, columns=headers)
+        self.close()
+        return df
+
+    def click_on_market_share(self):
+        self.driver.scroll_into_view(self.CANVAS)
+        canvas = self.driver.find(self.CANVAS)
+        drawing = ActionChains(self.driver).move_by_offset(10, 15).click(canvas).release()
+        drawing.perform()
+
+    def user_tracking_get_filter(self):
+        filter_list = {}
+        labels = self.driver.find_all(self.USER_TRACKING_LABELS)
+        values = self.driver.find_all(self.USER_TRACKING_VALUES)
+        for i, j in zip(labels, values):
+            filter_list[i.text] = j.text
+        return filter_list
+
+    def user_tracking_edit_filter(self, **kwargs):
+        for label, values in kwargs.items():
+            cancel_icon_visible = self.driver.is_visible(self.CANCEL_ICON.format('Region')) or self.driver.is_visible(
+                self.CANCEL_ICON.format('User Groups'))
+
+            if label == 'region':
+                if cancel_icon_visible:
+                    self.driver.find(self.CANCEL_ICON.format('Region')).click()
+                for value in values:
+                    self.driver.click(self.DROP_DOWN.format('Region'))
+                    self.driver.find(self.TEXT_VALUE.format(value)).click()
+
+            elif label == 'usergroups':
+                if cancel_icon_visible:
+                    self.driver.find(self.CANCEL_ICON.format('User Groups')).click()
+                for value in values:
+                    self.driver.click(self.DROP_DOWN.format('User Groups'))
+                    self.driver.find(self.TEXT_VALUE.format(value)).click()
+
+            elif label == 'timeperiod':
+                if values is not None:
+                    self.driver.click(self.CANCEL_ICON.format('Time Period'))
+                    self.driver.find(self.TEXT_VALUE.format(values)).click()
+                else:
+                    raise ValueError("No value provided for 'timeperiod'")
+            else:
+                raise NotImplementedError(f"Filter for '{label}' is not implemented")
+
+    def get_table_content(self):
+        self.driver.wait_for_disappear(self.PROGRESSBAR)
+        content = self.driver.page_source
+        soup = BeautifulSoup(content, 'html.parser')
+        table = soup.find('table')
+        headers = [header.text for header in table.find_all('th')]
+        rows = table.find_all('tr')
+        data = []
+        for row in rows:
+            cells = row.find_all('td')
+            if cells:
+                data.append([cell.text.strip() for cell in cells])
+
+        df = pandas.DataFrame(data, columns=headers)
+        return df

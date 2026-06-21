@@ -1,0 +1,12 @@
+How to generate allure report?
+
+go to cmd
+set you test direcotory where testcases consist 
+and run this --> pytest --alluredir=reportallure
+
+above will generate allure json files
+
+now in cmd type allure serve [path of json files generated]
+
+ex: allure serve C:\Users\saikiran.challa\PycharmProjects\pythonProject4\test\reportallure
+

@@ -1,0 +1,163 @@
+import snowflake.snowpark as snowpark
+from functools import reduce
+from datetime import datetime
+import pandas as pd
+
+
+def main(session: snowpark.Session):
+    silver_table_list = ['CAMPAIGN','CAMPAIGNMEMBER','CASE','PRICEBOOK2','PRICEBOOKENTRY','QUOTE']#['CAMPAIGN','CAMPAIGNMEMBER','CASE','PRICEBOOK2','PRICEBOOKENTRY','QUOTE'] #,'CAMPAIGN','ACCOUNT','CONTRACT','LEAD'
+    gold_table_list = ['CAMPAIGN','CAMPAIGN_MEMBER','CASE','PRICEBOOK2','PRICEBOOK_ENTRY','QUOTE']#['CAMPAIGN','CAMPAIGN_MEMBER','CASE','PRICEBOOK2','PRICEBOOK_ENTRY','QUOTE'] #,'CAMPAIGN','ACCOUNT','CONTRACT','LEAD'
+    
+    rows = []
+    
+    for silver_tbl_name,gold_tbl_name in zip(silver_table_list,gold_table_list):
+        # Your SQL query
+        sql_query = f'''
+        SELECT '{silver_tbl_name}' AS TABLE_NAME,'SILVER DUPLICATE CHECK' AS CHECK_NAME, CASE WHEN CNT =0 THEN 'PASSED' ELSE 'FAILED' END AS STATUS, 
+        CNT AS COUNT FROM (select '{silver_tbl_name}',count(*) AS CNT from (select id,md5_checksum, SYSTEMMODSTAMP,load_dttm, count(1) from 
+        STG_SFDC_ST_DB_QAT.SFDC_ST_V.{silver_tbl_name}    group by 1,2,3,4 having COUNT(*) > 1))
+        UNION ALL
+        SELECT '{silver_tbl_name}' table_name,'SILVER UNIQUENESS CHECK' AS CHECK_NAME,CASE WHEN difference = 0 THEN 'PASSED' ELSE 'FAILED' END AS STATUS,
+        DIFFERENCE AS COUNT FROM 
+        (Select '{silver_tbl_name}' table_name, count(*) record_count, count(distinct id, md5_checksum,SYSTEMMODSTAMP) key_count,
+        count(*)-count(distinct id, md5_checksum,SYSTEMMODSTAMP)  difference from STG_SFDC_ST_DB_QAT.SFDC_ST_V.{silver_tbl_name})
+        UNION ALL
+        select '{silver_tbl_name}' AS Table_Name,'SILVER NULL CHECK' as check_name,case when count(*) = 0 then 'PASSED' else 'FAILED' END AS STATUS,
+        count(*) as cnt from (select * from stg_sfdc_st_db_qat.SFDC_ST_V.{silver_tbl_name} 
+        where id is null or MD5_CHECKSUM is null or SYSTEMMODSTAMP is null or load_dttm is null or curr_ind is null)
+        UNION ALL
+        select '{silver_tbl_name}'Table_Name,'LOAD_DTTM SHOULD NOT BE BEFORE SYSTEMMODSTAMP' AS CHECK_NAME,CASE WHEN COUNT(*) = 0 THEN 'PASSED' ELSE 'FAILED'
+        END AS STATUS,count(*) as cnt from (select * from stg_sfdc_st_db_QAT.SFDC_ST_V.{silver_tbl_name} 
+        where DATE_TRUNC('DAY',SYSTEMMODSTAMP) > '2023-09-21' and  to_date(load_dttm) < to_date(SYSTEMMODSTAMP))
+        UNION ALL
+        SELECT '{silver_tbl_name}' table_name,'COUNT CHECK B/W DISTINCT_ID AND ID WHERE CURR_ID=Y' AS CHECK_NAME,CASE WHEN difference =0 THEN 'PASSED' 
+        ELSE 'FAILED'  END AS STATUS, difference AS COUNT FROM
+        (select'{silver_tbl_name}' table_name, (select count(id) from stg_sfdc_st_db_qat.SFDC_ST_V.{silver_tbl_name} where curr_ind ='Y') cnt_y, 
+        (select count(distinct id) from stg_sfdc_st_db_qat.SFDC_ST_V.{silver_tbl_name}) tot_cnt, (select count(distinct id) 
+        from stg_sfdc_st_db_QAT.SFDC_ST_V.{silver_tbl_name}) - (select count(id) from stg_sfdc_st_db_qat.SFDC_ST_V.{silver_tbl_name} 
+        where curr_ind ='Y') difference)
+        UNION ALL
+        SELECT '{silver_tbl_name}' Tablename,'COUNT CHECK B/W DISTINCT_ID AND CURR_IND Y AND LATEST RECORD AS CURR_IND Y (SILVER)' AS CHECK_NAME,
+        CASE WHEN DIFF_DIST_ID_Y =0 AND DIFF_DIST_ID_LTST_Y =0 THEN 'PASSED' ELSE 'FAILED' END AS STATUS, DIFF_DIST_ID_LTST_Y AS COUNT FROM
+        (SELECT '{silver_tbl_name}' Tablename,(SELECT COUNT(DISTINCT id) FROM STG_SFDC_ST_DB_QAT.SFDC_ST_V.{silver_tbl_name}) tot_dist_id,
+        (SELECT COUNT(id) FROM STG_SFDC_ST_DB_QAT.SFDC_ST_V.{silver_tbl_name} WHERE CURR_IND = 'Y') tot_y,(SELECT COUNT(tgt.id) 
+        FROM STG_SFDC_ST_DB_QAT.SFDC_ST_V.{silver_tbl_name} tgt JOIN(select * from (select id,md5_checksum,load_dttm,SYSTEMMODSTAMP,
+        row_number() over (partition by id order by SYSTEMMODSTAMP desc nulls last,load_dttm desc nulls last) rn 
+        from STG_SFDC_ST_DB_QAT.SFDC_ST_V.{silver_tbl_name}) a where a.rn = 1)ltst ON tgt.id = ltst.id 
+        WHERE tgt.CURR_IND = 'Y' and tgt.md5_checksum = ltst.md5_checksum and tgt.SYSTEMMODSTAMP = ltst.SYSTEMMODSTAMP and 
+        tgt.load_dttm = ltst.load_dttm) tot_ltst_y,(tot_dist_id-tot_y) diff_dist_id_y,(tot_dist_id-tot_ltst_y) diff_dist_id_ltst_y)
+        UNION ALL
+        SELECT '{silver_tbl_name}' AS TABLE_NAME,'COUNT CHECK B/W DISTINCT_ID OF GOLD_HIST AND id OF SILVER WHERE CURR_IND Y' AS CHECK_NAME, CASE WHEN 
+        difference=0 THEN 'PASSED' ELSE 'FAILED' END AS STATUS, difference AS COUNT FROM
+        (select'{silver_tbl_name}' table_name, (select count(id) from stg_sfdc_st_db_qat.SFDC_ST_V.{silver_tbl_name} where curr_ind ='Y') cnt_y, 
+        (select count(distinct {gold_tbl_name}_ID) from cdw_coretfb_db_qat.sfdc_hist.{gold_tbl_name} where source_system_id=300) tot_cnt, 
+        (select count(distinct {gold_tbl_name}_ID) from cdw_coretfb_db_qat.sfdc_hist.{gold_tbl_name} where source_system_id=300) - (select count(id) 
+        from stg_sfdc_st_db_qat.SFDC_ST_V.{silver_tbl_name} where curr_ind ='Y') difference)
+        UNION ALL
+        SELECT '{gold_tbl_name}' table_name,'GOLD_HIST UNIQUENESS CHECK' AS CHECK_NAME,CASE WHEN difference = 0 THEN 'PASSED' ELSE 'FAILED' END AS STATUS,
+        difference AS COUNT FROM
+        (Select '{gold_tbl_name}' table_name, count(*) record_count, count(distinct {gold_tbl_name}_id, md5_checksum, system_modstamp_ts) key_count,count(*)-count(distinct {gold_tbl_name}_id, md5_checksum, system_modstamp_ts)  difference from CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id=300)
+        UNION ALL
+        SELECT '{gold_tbl_name}' table_name,'GOLD_HIST DUPLICATE CHECK' AS CHECK_NAME, CASE WHEN CNT =0 THEN 'PASSED' ELSE 'FAILED' END AS STATUS, 
+        CNT AS COUNT FROM
+        (select '{gold_tbl_name}'table_name,count(*) AS CNT from (select {gold_tbl_name}_id,md5_checksum,SYSTEM_MODSTAMP_TS,LOAD_DATE_TS, count(1) from CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id=300 group by {gold_tbl_name}_id, md5_checksum,SYSTEM_MODSTAMP_TS,LOAD_DATE_TS having count(*) > 1))
+        UNION ALL
+        SELECT '{gold_tbl_name}' TABLE_NAME,'GOLD_HIST DUPLICATE UID CHECK' AS CHECK_NAME, CASE WHEN CNT = 0 THEN 'PASSED' ELSE 'FAILED' END AS STATUS,
+        CNT AS COUNT FROM
+        (select '{gold_tbl_name}' TABLE_NAME,count(*) as cnt from (select edm_{gold_tbl_name}_uid from CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id=300 group by EDM_{gold_tbl_name}_UID having count(*) > 1))
+        UNION ALL
+        SELECT '{gold_tbl_name}' Table_name,'COUNT CHECK B/W DISTINCT_ID AND CURR_IND Y AND LATEST RECORD AS CURR_IND Y (GOLD)' AS CHECK_NAME, CASE WHEN 
+        DIFF_DIST_ID_Y = 0 AND DIFF_DIST_ID_LTST_Y=0 THEN 'PASSED' ELSE 'FAILED' END AS STATUS, DIFF_DIST_ID_LTST_Y AS COUNT FROM
+        (SELECT '{gold_tbl_name}' Tablename,(SELECT COUNT(DISTINCT {gold_tbl_name}_ID) FROM CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id=300) tot_dist_id,(SELECT COUNT({gold_tbl_name}_ID) FROM CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id=300 and CURRENT_IND = 'Y') tot_y,(SELECT COUNT(tgt.{gold_tbl_name}_ID) FROM ( select * from CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id=300) tgt JOIN (select * from (select {gold_tbl_name}_ID,md5_checksum,LOAD_DATE_TS,SYSTEM_MODSTAMP_TS,row_number() over (partition by {gold_tbl_name}_ID order by SYSTEM_MODSTAMP_TS desc nulls last, LOAD_DATE_TS desc nulls last) rn from CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id=300) a where a.rn = 1)ltst ON tgt.{gold_tbl_name}_ID = ltst.{gold_tbl_name}_ID WHERE tgt.CURRENT_IND = 'Y' and tgt.md5_checksum = ltst.md5_checksum and tgt.SYSTEM_MODSTAMP_TS = ltst.SYSTEM_MODSTAMP_TS and tgt.LOAD_DATE_TS = ltst.LOAD_DATE_TS) tot_ltst_y,(tot_dist_id-tot_y) diff_dist_id_y,(tot_dist_id-tot_ltst_y) diff_dist_id_ltst_y)
+        UNION ALL
+        SELECT '{gold_tbl_name}'Table_Nam,'NULL CHECKS IN GOLD_HIST' AS CHECK_NAME, CASE WHEN CNT=0 THEN 'PASSED' ELSE 'FAILED' END AS STATUS, CNT AS COUNT FROM
+        (select '{gold_tbl_name}'Table_Name,count(*) as cnt from (select * from(select * from CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id =300 )where EDM_{gold_tbl_name}_UID IS NULL or {gold_tbl_name}_ID is NULL or CURRENT_IND is null or MD5_CHECKSUM is null or SYSTEM_MODSTAMP_TS IS NULL or EFFECTIVE_START_DATE_TS IS NULL or EFFECTIVE_END_DATE_TS IS NULL))
+        UNION ALL
+        SELECT '{gold_tbl_name}'Table_Name,'NULL CHECKS IN GOLD_HIST CREATED_DATETIME COLUMN' AS CHECK_NAME,CASE WHEN CNT =0 THEN 'PASSED' ELSE 'FAILED' END AS STATUS,CNT AS COUNT FROM
+        (select '{gold_tbl_name}'Table_Name,count(*) as cnt from (select * from CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id =300 and  created_datetime IS NULL))
+        UNION ALL
+        SELECT '{gold_tbl_name}' table_name,'COUNT CHECK B/W DISTINCT_ID OF GOLD_HIST AND ID WHERE CURR_IND Y' AS CHECK_NAME, CASE WHEN difference = 0 THEN 'PASSED' ELSE 'FAILED' END AS STATUS, difference AS COUNT FROM
+        (select '{gold_tbl_name}' table_name, (select count({gold_tbl_name}_id) from CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id=300 and  CURRENT_IND  ='Y') cnt_y, (select count(distinct {gold_tbl_name}_id) from CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id=300) tot_cnt, (select count(distinct {gold_tbl_name}_id) from CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id=300) - (select count({gold_tbl_name}_id) from CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id=300 and CURRENT_IND  ='Y') difference)
+        UNION ALL
+        SELECT '{gold_tbl_name}' table_name,'MORE_THAN_1_REC_PER_DAY' AS CHECK_NAME, CASE WHEN MORE_THAN_1_REC_PER_DAY = 0 THEN 'PASSED' ELSE 'FAILED' END AS STATUS, MORE_THAN_1_REC_PER_DAY AS COUNT FROM
+        (Select '{gold_tbl_name}' as table_name,COUNT(*) AS MORE_THAN_1_REC_PER_DAY FROM((SELECT {gold_tbl_name}_ID,DATE_TRUNC('DAY',LOAD_DATE_TS) DAY,system_modstamp_ts,COUNT(*) AS DAY_COUNT FROM CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id=300 GROUP BY 1,2,3 HAVING COUNT(*) > 1)))
+        UNION ALL
+        SELECT '{gold_tbl_name}' table_name,'DELETED FROM SOURCE INDICATOR' AS CHECK_NAME, CASE WHEN CNT = 0 THEN 'PASSED' else 'FAILED' END AS STATUS, CNT AS COUNT FROM
+        (SELECT COUNT(*) AS CNT FROM (SELECT IS_DELETED,DELETED_FROM_SRC_IND FROM CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id=300 and  IS_DELETED = TRUE AND DELETED_FROM_SRC_IND <> 'Y' UNION ALL SELECT IS_DELETED,DELETED_FROM_SRC_IND FROM CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id=300 and  IS_DELETED = FALSE AND DELETED_FROM_SRC_IND <> 'N'))
+        UNION ALL
+        SELECT '{gold_tbl_name}' table_name,'GOLD EFECTIVE START DATE END DATE' AS CHECK_NAME, CASE WHEN CNT = 0 THEN 'PASSED' else 'FAILED' END AS STATUS, CNT AS COUNT FROM
+        (select '{gold_tbl_name}' table_name ,count(*) as cnt from (SELECT s.id,s.SYSTEMMODSTAMP,s.LOAD_DTTM, g.{gold_tbl_name}_ID, g.CURRENT_IND, case when g.SYSTEM_MODSTAMP_TS >  lag (g.effective_start_date_ts) over (partition by id order by g.effective_start_date_ts) then g.SYSTEM_MODSTAMP_TS when g.LOAD_DATE_TS > lag (g.effective_start_date_ts) over (partition by id order by g.effective_start_date_ts) then g.LOAD_DATE_TS end as test,g.EFFECTIVE_START_DATE_TS, g.EFFECTIVE_END_DATE_TS, g.SYSTEM_MODSTAMP_TS,g.last_modified_datetime, g.LOAD_DATE_TS,g.MD5_CHECKSUM FROM stg_sfdc_st_db_QAt.SFDC_ST_V.{silver_tbl_name} s LEFT JOIN (select * from CDW_CORETFB_DB_QAT.sfdc_hist.{gold_tbl_name} where source_system_id=300 ) g ON s.id = g.{gold_tbl_name}_id and s.CURR_IND = 'Y') where test <> EFFECTIVE_START_DATE_TS)
+        UNION ALL
+        SELECT '{gold_tbl_name}' TABLE_NAME,'VALIDATION OF RECORD UNIQUENESS-TABLE KEY AND EFFECTIVE_ST_DATE SHOULD BE UNIQUE ON EACH TABLE GOLD_LATEST' AS CHECK_NAME, CASE WHEN diff_DIST_UID_TO_UID=0 AND EFF_UNQ=0 THEN 'PASSED' ELSE 'FAILED' END AS STATUS,EFF_UNQ AS COUNT FROM 
+        (select '{gold_tbl_name}' TABLE_NAME, count(distinct edm_{gold_tbl_name}_uid) CNT_DIST_UID,count(edm_{gold_tbl_name}_uid) CNT_UID,count(distinct edm_{gold_tbl_name}_uid)-count(edm_{gold_tbl_name}_uid) as diff_DIST_UID_TO_UID,(SELECT COUNT(*) AS CNT FROM (select {gold_tbl_name}_id,effective_start_date_ts, count(1) from CDW_CORETFB_DB_QAT.SFDC_LATEST.{gold_tbl_name} where source_system_id=300 group by 1,2 having count(1) > 1))AS EFF_UNQ from CDW_CORETFB_DB_QAT.SFDC_LATEST.{gold_tbl_name} where source_system_id=300)
+        UNION ALL
+        SELECT '{gold_tbl_name}' TABLE_NAME,'LOAD_DTTM SHOULD NOT BE BEFORE SYSTEMMODSTAMP IN GOLD' AS CHECK_NAME, CASE WHEN cnt=0  THEN 'PASSED' ELSE 'FAILED' END AS STATUS,cnt AS COUNT FROM 
+        (select '{gold_tbl_name}'Table_Name,count(*) as cnt from (select * from CDW_CORETFB_DB_QAT.sfdc_hist.{gold_tbl_name} where source_system_id=300 and  to_date(load_date_ts) < to_date(system_modstamp_ts)))
+        UNION ALL
+        SELECT '{gold_tbl_name}' TABLE_NAME,'EFFECTIVE_START_DATE_TS = CREATED_DATETIME & EFFECTIVE_START_DATE_TS = SYSTEM_MODSTAMP_TS' AS CHECK_NAME, CASE WHEN CNT=0  THEN 'PASSED' ELSE 'FAILED' END AS STATUS,CNT AS COUNT FROM 
+        (select count(*) AS CNT from (select *, case when system_modstamp_ts > lagged then 'system' else 'load' end as test,case when created_datetime is null then 'na' end as test1 from (select *,lag(effective_start_date_ts)over(partition by {gold_tbl_name}_id order by effective_start_date_ts asc, rn asc) as lagged from (select {gold_tbl_name}_id,md5_checksum, created_datetime, load_date_ts,effective_start_date_ts, row_number()over(partition by {gold_tbl_name}_id order by effective_start_date_ts asc) as rn,system_modstamp_ts from CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id = 300  ))) where rn = 1 and created_datetime <> effective_start_date_ts or rn = 1 and test1 = 'na' and system_modstamp_ts <> effective_start_date_ts or rn > 1 and test = 'system' and system_modstamp_ts <> effective_start_date_ts or rn > 1 and test = 'load' and load_date_ts <> effective_start_date_ts)
+        UNION ALL
+        SELECT '{gold_tbl_name}' TABLE_NAME,'GOLD_LATEST DUPLICATE CHECK' AS CHECK_NAME, CASE WHEN CNT=0  THEN 'PASSED' ELSE 'FAILED' END AS STATUS,CNT AS COUNT FROM 
+        (select '{gold_tbl_name}'table_name,count(*) AS CNT from (select {gold_tbl_name}_id,md5_checksum,SYSTEM_MODSTAMP_TS,LOAD_DATE_TS,count(1) from CDW_CORETFB_DB_QAT.SFDC_LATEST.{gold_tbl_name} where source_system_id=300 group by {gold_tbl_name}_ID, md5_checksum,SYSTEM_MODSTAMP_TS,LOAD_DATE_TS having count(*) > 1))
+        UNION ALL
+        SELECT '{gold_tbl_name}' TABLE_NAME,'NULL CHECKS IN GOLD_LATEST' AS CHECK_NAME, CASE WHEN CNT=0  THEN 'PASSED' ELSE 'FAILED' END AS STATUS,CNT AS COUNT FROM 
+        (select '{gold_tbl_name}'Table_Name,count(*) as cnt from (select * from CDW_CORETFB_DB_QAT.SFDC_LATEST.{gold_tbl_name} where source_system_id =300) where EDM_{gold_tbl_name}_UID IS NULL or {gold_tbl_name}_ID is NULL or  MD5_CHECKSUM is null or EFFECTIVE_START_DATE_TS IS NULL or EFFECTIVE_END_DATE_TS IS NULL)
+        UNION ALL
+        SELECT '{gold_tbl_name}' TABLE_NAME,'NULL CHECKS IN GOLD_LATEST FOR CREATED_DATETIME COLUMN' AS CHECK_NAME, CASE WHEN CNT=0  THEN 'PASSED' ELSE 'FAILED' END AS STATUS,CNT AS COUNT FROM 
+        (select '{gold_tbl_name}'Table_Name,count(*) as cnt from (select * from CDW_CORETFB_DB_QAT.SFDC_LATEST.{gold_tbl_name} where source_system_id =300  and  CREATED_DATETIME IS NULL))
+        UNION ALL
+        SELECT '{gold_tbl_name}' TABLE_NAME,'GOLD_LATEST UNIQUENESS CHECKS' AS CHECK_NAME, CASE WHEN difference=0  THEN 'PASSED' ELSE 'FAILED' END AS STATUS,difference AS COUNT FROM 
+        (Select '{gold_tbl_name}' table_name, count(*) record_count, count(distinct {gold_tbl_name}_id, md5_checksum, system_modstamp_ts) key_count,count(*)-count(distinct {gold_tbl_name}_id, md5_checksum, system_modstamp_ts)  difference from CDW_CORETFB_DB_QAT.SFDC_LATEST.{gold_tbl_name} where source_system_id=300)
+        UNION ALL
+        SELECT '{gold_tbl_name}' TABLE_NAME,'GOLD_LATEST DUPLICATE CHECK' AS CHECK_NAME, CASE WHEN CNT=0  THEN 'PASSED' ELSE 'FAILED' END AS STATUS,CNT AS COUNT FROM 
+        (select '{gold_tbl_name}',count(*) AS CNT from (select {gold_tbl_name}_id,md5_checksum,system_modstamp_ts,load_date_ts , count(1) from CDW_CORETFB_DB_QAT.SFDC_LATEST.{gold_tbl_name} where source_system_id=300 group by {gold_tbl_name}_ID, md5_checksum,system_modstamp_ts,load_date_ts having count(*) > 1))
+        UNION ALL
+        SELECT '{gold_tbl_name}' TABLE_NAME,'GOLD_LATEST DUPLICATE UID CHECK' AS CHECK_NAME, CASE WHEN CNT=0  THEN 'PASSED' ELSE 'FAILED' END AS STATUS,CNT AS COUNT FROM 
+        (select '{gold_tbl_name}',count(*) AS CNT from (select edm_{gold_tbl_name}_uid from CDW_CORETFB_DB_QAT.SFDC_LATEST.{gold_tbl_name} where source_system_id=300 group by EDM_{gold_tbl_name}_UID having count(*) > 1))
+        UNION ALL
+        SELECT '{gold_tbl_name}' TABLE_NAME,'COUNT CHECK B/W DISTINCT_ID OF GOLD_LATEST AND ID WHERE CURR_IND Y OF GOLD_HIST' AS CHECK_NAME, CASE WHEN difference=0  THEN 'PASSED' ELSE 'FAILED' END AS STATUS,difference AS COUNT FROM 
+        (select '{gold_tbl_name}' table_name, (select count( {gold_tbl_name}_id) from CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id=300 and  CURRENT_IND  ='Y') cnt_y, (select count(distinct {gold_tbl_name}_id) from CDW_CORETFB_DB_QAT.SFDC_LATEST.{gold_tbl_name} where source_system_id=300) tot_cnt, (select count(distinct {gold_tbl_name}_id) from CDW_CORETFB_DB_QAT.SFDC_LATEST.{gold_tbl_name} where source_system_id=300) - (select count({gold_tbl_name}_id) from CDW_CORETFB_DB_QAT.SFDC_HIST.{gold_tbl_name} where source_system_id=300 and  CURRENT_IND  ='Y') difference)
+        UNION ALL
+        SELECT '{silver_tbl_name}' TABLE_NAME,'FRESHNESS CHECK' AS CHECK_NAME, CASE WHEN freshness_indicator='uptodate'  THEN 'PASSED' ELSE 'FAILED' END AS STATUS,0 AS COUNT FROM 
+        (select case when file_date=current_date() then 'uptodate' else 'not_uptodate' end as freshness_indicator from (SELECT max(cast(LOAD_DTTM as date)) as file_date FROM STG_SFDC_ST_DB_QAT.SFDC_ST_V.{silver_tbl_name}))
+        UNION ALL
+        SELECT '{silver_tbl_name}' TABLE_NAME,'DELTA_INDICATOR_CHECK' AS CHECK_NAME, CASE WHEN delta_indicator='Passed'  THEN 'PASSED' ELSE 'FAILED' END AS STATUS,count AS COUNT FROM 
+        (select count,case when count >10 then 'Passed' else 'failed' end as delta_indicator from (select count(*) as count from STG_SFDC_ST_DB_QAT.SFDC_ST_V.{silver_tbl_name} where LOAD_DTTM in (SELECT max(LOAD_DTTM) FROM STG_SFDC_ST_DB_QAT.SFDC_ST_V.{silver_tbl_name})))
+        UNION ALL
+        SELECT '{gold_tbl_name}' TABLE_NAME,'DISTINCTKEY CHECK' AS CHECK_NAME, CASE WHEN distinct_key_indicator='Passed'  THEN 'PASSED' ELSE 'FAILED' END AS STATUS,case when distinct_key_indicator='Passed' then 0 else cnt2 end AS COUNT FROM 
+        (select cnt1,cnt2,case when cnt1=cnt2 then 'Passed' else 'FAILED' end as distinct_key_indicator from(select count(distinct edm_{gold_tbl_name}_uid)cnt1, count(edm_{gold_tbl_name}_uid) cnt2 from CDW_CORETFB_DB_QAT.sfdc_hist.{gold_tbl_name} where source_system_id = 300))
+        UNION ALL
+        SELECT '{gold_tbl_name}' TABLE_NAME,'DISTINCT KEY DATE CHECK' AS CHECK_NAME, CASE WHEN distinct_key_startdate_indicator='Passed'  THEN 'PASSED' ELSE 'FAILED' END AS STATUS,CNT AS COUNT FROM 
+        (select CNT,case when cnt=0 then 'Passed' else 'FAILED' end as distinct_key_startdate_indicator from(select count(*) as cnt from(select {gold_tbl_name}_id,effective_start_date_ts, count(1) from CDW_CORETFB_DB_QAT.sfdc_hist.{gold_tbl_name}  where source_system_id = 300 group by 1,2 having count(1) > 1)))
+        UNION ALL
+        SELECT '{gold_tbl_name}' TABLE_NAME,'NULL CHECK IN SILVER WITH CREATED_DATE COLUMN' AS CHECK_NAME, CASE WHEN cnt=0  THEN 'PASSED' ELSE 'FAILED' END AS STATUS,CNT AS COUNT FROM 
+        (select '{silver_tbl_name}'Table_Name,count(*) as cnt from (select * from stg_sfdc_st_db_qat.SFDC_ST_V.{silver_tbl_name} where createddate is null))
+        
+        '''
+
+        # Execute the SQL query and load the result into a DataFrame
+        dataframe = session.sql(sql_query)
+
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        dataframe = dataframe.withColumn("Execution_Time", snowpark.functions.lit(current_time))
+
+        # Add the dataframe to the list of rows
+        rows.append(dataframe)
+
+    # Combine all dataframes into a single dataframe
+    result_df = reduce(lambda df1, df2: df1.union(df2), rows)
+    
+    result_df = result_df.orderBy('TABLE_NAME')
+
+    # # Return value will appear in the Results tab.
+    return result_df
+
+
+
+
+
+
+
+
+
+

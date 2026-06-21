@@ -1,0 +1,11 @@
+[tool:pytest]
+addopts = --cov=integration_tests
+          --cov-report=html
+
+[pytest]
+addopts = --allure-no-capture
+
+[global]
+trusted-host = pypi.python.org
+               pypi.org
+               files.pythonhosted.org

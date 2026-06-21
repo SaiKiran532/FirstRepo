@@ -1,0 +1,63 @@
+Two ways we can build our test
+1. Using local github
+2. Codecommit repository 
+
+1. Using local github:
+
+--> under codebuild click on create build 
+--> privide all the necessary information
+    . project name 
+	. source provider (Git Hub)
+	  . connect Git hub using git hub personal token 
+	    How to generate token in git hub??
+		->Main Setting - Developer Settings - Personal access tokens - Tokens(classic) - Generate new token
+	
+      . select publick or private repository
+	  . Privide repository path
+	. Select Ubuntu 
+	. Select use a buildspec file 
+	  . Provide a buildspec.yml file path which we created in git hub worflows 
+	
+	. Select Artifact Amazon S3 Bucket ( to store reports and all) 
+	   . Bucket name 
+	. create build
+--> under build left panel we will see report group 
+    . Here we can create a report group, further we can select that group to generate test reports
+	
+--> Create a S3 bucket ( this bucket we will use to store the artifacts and test reports)\
+
+--> Create a pipeline 
+    . Select the Source (Git hub version v1)
+    . Under pipeline need to select codebuild ( the build we have made)
+	. Create pipeline
+------------------------------------------------------------------------------------------------------------------------------
+	
+2. Codecommit repository
+
+--> Codecommit is same like GitHub, where we can create a repository and use for push and pull 
+
+--> Creating fresh CI/CD pipeline
+--> under codebuild click on create build 
+--> privide all the necessary information
+    . project name 
+	. source provider (AWS Codecommit)
+	  . Select repository 
+	  . Select branch
+
+	. Select Ubuntu 
+	. Select use a buildspec file 
+	  . Provide a buildspec.yml file path which we created in Codecommit repository (optional to provide path)
+	
+	. Select Artifact Amazon S3 Bucket ( to store reports and all) 
+	   . Bucket name 
+	. create build
+--> under build left panel we will see report group 
+    . Here we can create a report group, further we can select that group to generate test reports
+	
+--> Create a S3 bucket ( this bucket we will use to store the artifacts and test reports)\
+
+--> Create a pipeline 
+    . Select the Source (Git hub version v1)
+    . Under pipeline need to select codebuild ( the build we have made)
+	. Create pipeline   
+	

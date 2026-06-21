@@ -1,0 +1,55 @@
+import sys
+import os
+import json
+import platform
+
+from ..config import CONFIG_USER
+__dir = os.path.dirname(os.path.realpath(__file__))
+
+TARGET_DIR = os.path.join(os.path.dirname(__dir), "tests_results")
+SCREENSHOTS_DIR = os.path.join(TARGET_DIR, "screenshots")
+BROWSER_LOGS_DIR = os.path.join(TARGET_DIR, "browser_logs")
+DOWNLOADS_DIR = os.path.join(TARGET_DIR, "downloads")
+allure_report = os.path.join(TARGET_DIR, "allure_report")
+allure_categories = os.path.join(allure_report, "categories.json")
+allure_environment = os.path.join(allure_report, "environment.properties")
+
+# create folder if it does not exist
+for folder in (TARGET_DIR, SCREENSHOTS_DIR, BROWSER_LOGS_DIR, DOWNLOADS_DIR, allure_report):
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+
+
+Browser = CONFIG_USER["browser"]
+application = CONFIG_USER["application"]
+
+system = platform.system()
+python_version = sys.version
+
+with open(allure_environment, "w") as env_file:
+    env_file.write('Browser = '+Browser+'\n'
+                   'Application = '+application+'\n'
+                   'os_platform = '+system+'\n'
+                   'python_version = '+python_version)
+
+categories_data = [
+  {
+    "name": "Product defects",
+    "messageRegex": ".*ignored.*",
+    "matchedStatuses": ["skipped"]
+  },
+  {
+    "name": "Test defects",
+    "messageRegex": ".*RuntimeException.*",
+    "matchedStatuses": ["broken"]
+  }
+]
+
+with open(allure_categories, 'w') as file:
+    json.dump(categories_data, file)
+
+
+os.chmod(DOWNLOADS_DIR, 0o777)
+
+DATA_DIR = os.path.join(os.path.dirname(__dir), "data")
+GlOSSARY_FILE = os.path.join(DATA_DIR, "glossary.csv")

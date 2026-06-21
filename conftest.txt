@@ -1,0 +1,154 @@
+import os
+import datetime
+import json
+import pytest
+import allure
+from allure_commons.types import AttachmentType
+
+from ..config import CONFIG_USER
+from .result_config import DOWNLOADS_DIR, SCREENSHOTS_DIR, TARGET_DIR, BROWSER_LOGS_DIR
+from ..application.pages import TestShell
+
+
+def pytest_configure(config):
+    # register an additional marker
+    config.addinivalue_line("markers", "highpriority: mark test as high priority to group")
+
+
+def pytest_runtest_setup(item):
+    run_env_skipped = item.config.getoption("--run_env_skipped")
+
+    # Skip test_web that are marked with skip_env marker
+    skip_env_marker = item.get_closest_marker("skip_env")
+    if skip_env_marker is not None and run_env_skipped == False:
+        reasons: List[str] = []
+        skip_env: dict = skip_env_marker.args[0]
+        if len(reasons) != 0:
+            pytest.skip("".join(reasons))
+            item.add_marker(pytest.mark.xfail(reason="".join(reasons)))
+            return
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--remote",
+        help="Whether to install driver",
+        type=str,
+        default=None
+    )
+
+    parser.addoption(
+        "--headless",
+        help="Whether to run in headless mode",
+        type=str,
+        choices=("True", "true", "False", "false"),
+        default="false"
+    )
+
+    parser.addoption(
+        "--browser",
+        help="Whether to run on which browser",
+        type=str,
+        choices=("chrome", "edge", "firefox"),
+        default="chrome"
+    )
+
+    parser.addoption(
+        "--run_env_skipped",
+        action="store_true",
+        default=False,
+        help="run skipped test because of environment.",
+    )
+
+
+@pytest.fixture(scope="session")
+def arg_remote(request):
+    return request.config.getoption("--remote")
+
+
+@pytest.fixture(scope="session")
+def arg_headless(request):
+    return request.config.getoption("--headless").lower() == "true"
+
+
+@pytest.fixture(scope="session")
+def arg_browser(request):
+    return CONFIG_USER["browser"] or request.config.getoption("--browser")
+
+
+@pytest.fixture(scope="session")
+def download_dir():
+    return DOWNLOADS_DIR
+
+
+@pytest.fixture(scope="session")
+def shell(arg_remote, arg_headless, arg_browser):  # pylint: disable=redefined-outer-name
+
+    shell = TestShell({
+        "temp": TARGET_DIR,
+        "headless": arg_headless,
+        "timeout": 20,
+        "remote": arg_remote,
+        "browser": arg_browser
+    })
+    try:
+        print("connected")
+        shell.connect(CONFIG_USER["login_url"], CONFIG_USER["home_page"], CONFIG_USER["username"],
+                      CONFIG_USER["password"])
+        yield shell
+    except Exception as e:
+        currentDT = datetime.datetime.now()
+        shell.driver.get_screenshot_as_file(
+            os.path.join(SCREENSHOTS_DIR, "connect_fail_{}.png".format(str(currentDT).replace(" ", "_")))
+        )
+        shell.quit()
+        raise e
+
+    try:
+        shell.quit()
+    except Exception:
+        print("Warning: Shell close fail.")
+
+
+def pytest_exception_interact(node, call, report):  # pylint:disable=duplicate-argument-name, unused-argument
+    # set a report attribute for failed call
+    setattr(node, "rep_fail", True)
+
+
+def get_file_name(request):
+    class_type = request.cls
+    file_name = request.module.__name__
+    if class_type is not None:
+        file_name = file_name + "." + class_type.__name__.lower()
+    return file_name + "." + request.node.name
+
+
+# pylint:disable=redefined-outer-name
+@pytest.fixture(scope="function", autouse=True)
+def on_failure(request, shell):
+    yield
+    if CONFIG_USER['browser'].lower() != 'firefox':
+        logs = shell.driver.execute('getLog', {'type': 'browser'})
+        lo = shell.driver.mana
+
+        if hasattr(request.node, "rep_fail"):
+            if request.node.rep_fail is True:
+                try:
+                    log_file_path = os.path.join(
+                        BROWSER_LOGS_DIR,
+                        "{}.json".format(get_file_name(request))
+                    )
+                    with open(log_file_path, "w") as log_file:
+                        json.dump(logs, log_file)
+
+                    shell.driver.get_screenshot_as_file(
+                        os.path.join(SCREENSHOTS_DIR, "{}.png".format(get_file_name(request)))
+                    )
+                    allure.attach(shell.driver.get_screenshot_as_png(), name="{}.png".format(get_file_name(request)),
+                                  attachment_type=AttachmentType.PNG)
+                    allure.attach.file(source=log_file_path, name="{}.json".format(get_file_name(request)),
+                                       attachment_type=AttachmentType.JSON)
+
+                finally:
+                    shell.refresh()
+                    # shell.reset()

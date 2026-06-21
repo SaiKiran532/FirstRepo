@@ -1,0 +1,9 @@
+CONFIG_USER = {
+    "login_url": "https://example.com/login",
+    "home_page": "https://example.com/home",
+    "username": "your_username",
+    "password": "your_password",
+    "browser": "chrome",
+    "application": "Your Application Name"
+}
+

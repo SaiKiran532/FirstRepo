@@ -1,0 +1,208 @@
+from automation_tests.base.exceptions.element import ElementDisabledException
+from ..locators.locators import Locators
+class SimulationCommonFunctionality(Locators):
+
+    def __init__(self, driver):
+        self.driver = driver
+
+    def filters(self):
+        filter_list = {}
+        labels = self.driver.find_all(self.SM_FILTER_LABELS)
+        values = self.driver.find_all(self.SM_FILTER_VALUES)
+        for i, j in zip(labels, values):
+            filter_list[i.text] = j.text
+        return filter_list
+
+    def click_radio(self, key, kwargs):
+        self.driver.click(self.RADIO.format(kwargs[key.lower()]))
+
+    def unselect_all(self):
+        self.driver.click(self.CHECK_BOX.format('ALL'))
+        self.driver.click(self.CHECK_BOX.format('ALL'))
+
+    def click_checkbox(self, key, kwargs):
+        for value in kwargs[key.lower()]:
+            self.driver.input(self.SEARCH_BAR, value)
+            self.driver.click(self.CHECK_BOX.format(value))
+
+    def click_new_simulation(self, **kwargs):
+        self.driver.click(self.NEW_SIMULATION)
+        scenario_name = kwargs.get('scenario_name')
+        self.driver.input(self.SCENARIO_NAME, scenario_name)
+
+    def edit_simulation(self, apply=False, reset=False, cancel=False, skip=False, **kwargs):
+        self.driver.click(self.SM_EDIT_FILTER)
+        for key in kwargs:
+            key = key.title()
+            if key == 'Timeperiod':
+                key = 'Time Period'
+                self.driver.click(self.LABEL_BUTTON.format(key))
+                self.driver.find(self.RADIO.format(kwargs['timeperiod']), timeout=20)
+                self.driver.click(self.RADIO.format(kwargs['timeperiod']))
+            elif key in ('Channels' or 'Channel'):
+                key = 'Channel'
+                self.driver.click(self.LABEL_BUTTON.format(key))
+                self.unselect_all()
+                self.click_checkbox(key, kwargs)
+            elif key == 'Category':
+                self.driver.click(self.LABEL_BUTTON.format(key))
+                self.unselect_all()
+                self.click_checkbox(key, kwargs)
+            elif key in ('Manufacturers' or 'Manufacturer'):
+                key = 'Manufacturer'
+                self.driver.click(self.LABEL_BUTTON.format(key))
+                self.unselect_all()
+                self.click_checkbox(key, kwargs)
+            elif key in ('Brands' or 'Brand'):
+                key = 'Brand'
+                self.driver.click(self.LABEL_BUTTON.format(key))
+                self.unselect_all()
+                self.click_checkbox(key, kwargs)
+            elif key in ('Products' or 'Product'):
+                key = 'Product'
+                self.driver.click(self.LABEL_BUTTON.format('Brand'))
+                self.driver.click(self.NEXT_BUTTON)
+                if skip is False:
+                    self.driver.click(self.NEXT_BUTTON)
+                    self.unselect_all()
+                    self.click_checkbox(key, kwargs)
+                else:
+                    self.driver.click(self.SKIP_BUTTON)
+                    self.driver.click(self.RESET_BUTTON)
+            elif key == 'Select_Products':
+                value = kwargs['select_products']
+                for i in value:
+                    self.driver.click(self.SELECT_PRODUCT.format(i))
+
+            elif key == 'Bundle_Name':
+                bundle_name = kwargs['bundle_name']
+                self.driver.input(self.BUNDLE_NAME, bundle_name)
+                self.driver.click(self.DONE_BUTTON)
+
+            else:
+                raise NotImplementedError
+
+        if reset is True:
+            self.driver.click(self.RESET_BUTTON)
+            return self
+        if cancel is True:
+            self.driver.click(self.CANCEL_BUTTON)
+        if apply is True:
+            self.driver.click(self.APPLY_BUTTON)
+
+    def create_new_simulation(self, apply=False, reset=False, cancel=False, skip=False, **kwargs):
+        for key in kwargs:
+            key = key.title()
+            if key == 'Timeperiod':
+                self.driver.click(self.RADIO.format(kwargs['timeperiod']))
+                self.driver.click(self.NEXT_BUTTON)
+            elif key == 'Channels':
+                self.click_checkbox(key, kwargs)
+                self.driver.click(self.NEXT_BUTTON)
+            elif key == 'Category':
+                self.click_checkbox(key, kwargs)
+                self.driver.click(self.NEXT_BUTTON)
+            elif key in ('Manufacturers' or 'Manufacturer'):
+                self.click_checkbox(key, kwargs)
+                self.driver.click(self.NEXT_BUTTON)
+            elif key in ('Brands' or 'Brand'):
+                self.click_checkbox(key, kwargs)
+                self.driver.click(self.NEXT_BUTTON)
+            elif key in ('Products' or 'Product'):
+                if skip is False:
+                    self.click_checkbox(key, kwargs)
+                    self.driver.click(self.NEXT_BUTTON)
+                else:
+                    self.driver.click(self.SKIP_BUTTON)
+            elif key == 'Select_Products':
+                value = kwargs['select_products']
+                for i in value:
+                    self.driver.click(self.SELECT_PRODUCT.format(i))
+
+            elif key == 'Bundle_Name':
+                bundle_name = kwargs['bundle_name']
+                self.driver.input(self.BUNDLE_NAME, bundle_name)
+                self.driver.click(self.DONE_BUTTON)
+
+            else:
+                raise NotImplementedError
+
+        if reset is True:
+            self.driver.click(self.RESET_BUTTON)
+            return self
+        if cancel is True:
+            self.driver.click(self.CANCEL_BUTTON)
+        if apply is True:
+            self.driver.click(self.APPLY_BUTTON)
+            self.driver.find(self.SM_EDIT_FILTER)
+
+    def close_alert(self):
+        alert_message = self.driver.text(self.ALERT_TEXT)
+        self.driver.click(self.ALERT_CLOSE)
+        return alert_message
+
+    def delete_simulation_scenario(self, scenario_name):
+        self.driver.click(self.ALL_TAB)
+        self.driver.click(self.THREE_DOTS.format(scenario_name))
+        self.driver.click(self.DELETE_ICON)
+        self.driver.click(self.DELETE_SCENARIO)
+        return self.close_alert()
+
+    def pricing_and_profit_pool(self, increment=False, reset=False, save_continue=False, back=False, **kwargs):
+        tab = kwargs.get('tab')
+        if tab == 'Bulk / All Kellonova elections':
+            self.driver.click(self.HEADER_TAB.format('Bulk / All Kellonova elections'))
+            edit_column = kwargs.get('edit_column')
+            self.driver.click(self.EDIT_ICON.format(edit_column))
+            increment_by = kwargs.get('increment_by')
+            decrement_by = kwargs.get('decrement_by')
+            if increment is True:
+                for i in range(0, increment_by):
+                    self.driver.click(self.INCR_ICON)
+            else:
+                for i in range(0, decrement_by):
+                    self.driver.click(self.DECR_ICON)
+        elif tab == 'All competitors':
+            self.driver.click(self.HEADER_TAB.format('All competitors'))
+            self.driver.click(self.FOLLOW_CHECKBOX)
+            self.driver.click(self.HOLD_PRICE)
+            self.driver.click(self.ALL_COM_EDIT_ICON)
+            increment_by = kwargs.get('increment_by')
+            decrement_by = kwargs.get('decrement_by')
+            if increment is True:
+                for i in range(0, increment_by):
+                    self.driver.click(self.INCR_ICON)
+            else:
+                for i in range(0, decrement_by):
+                    self.driver.click(self.DECR_ICON)
+
+        elif reset is True:
+            self.driver.click(self.RESET_TO_DEFAULT)
+
+        elif save_continue is True:
+            self.driver.click(self.SAVE_CONTINUE)
+
+        elif back is True:
+            self.driver.click(self.BACK_SIMULATION)
+
+        else:
+            raise NotImplementedError
+
+    def promo_pricing(self, reset=False, save_continue=False, back=False, **kwargs):
+        # over_lay_price = kwargs.get('over_lay_price')
+        # expected_redemption_rate = kwargs.get('expected_redemption_rate')
+        # self.driver.click(self.PP_EDIT_ICON.format('Overlay price'))
+        # self.driver.input(self.OVER_LAY_PRICE, over_lay_price)
+        # overlay_toast_message = self.close_alert()
+        # self.driver.click(self.PP_EDIT_ICON.format('Expected redemption rate'))
+        # self.driver.input(self.EXPECTED_REDEMPTION_RATE, expected_redemption_rate)
+        # exp_red_rate_toast_message = self.close_alert()
+
+        if reset is True:
+            self.driver.click(self.RESET_TO_DEFAULT)
+
+        if save_continue is True:
+            self.driver.click(self.SAVE_CONTINUE)
+
+        if back is True:
+            self.driver.click(self.BACK_SIMULATION)

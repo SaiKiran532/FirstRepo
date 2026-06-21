@@ -1,0 +1,98 @@
+from .. import ui
+from ..locators.locators import Locators
+from .product_performance import ProductPerformance
+from .elasticity_action_grid import ElasticityActionGrid
+from .media_summary import MediaSummary
+
+
+class CategoryPerformance(Locators):
+
+    def __init__(self, driver):
+        self.driver = driver
+        self.driver.wait_for_disappear(self.PROGRESSBAR)
+
+    def filters(self):
+        return ui.CommonFunctionality(self.driver).filters()
+
+    def share(self):
+        return ui.CommonFunctionality(self.driver).share()
+
+    def download(self, file_type):
+        return ui.CommonFunctionality(self.driver).download(file_type)
+
+    def save(self):
+        return ui.CommonFunctionality(self.driver).save()
+
+    def close_alert(self):
+        return ui.CommonFunctionality(self.driver).close_alert()
+
+    def edit_filter(self, **kwargs):
+        ui.CommonFunctionality(self.driver).edit_filter(**kwargs)
+
+    def translate(self, language):
+        ui.CommonFunctionality(self.driver).translate(language)
+
+    def top_navigate_tooltip(self, feature):
+        return ui.CommonFunctionality(self.driver).nav_tooltip(feature)
+
+    def glossary_view(self, search=None):
+        return ui.CommonFunctionality(self.driver).glossary_view(search)
+
+    def expand_view(self):
+        return ui.CommonFunctionality(self.driver).expand_view()
+
+    def kpi_cards(self):
+        self.driver.wait_for_disappear(self.PROGRESSBAR, timeout=10)
+        kpi_card = []
+        kpi = self.driver.find_all(self.KPI_CARDS)
+        for i in kpi:
+            kpi_card.append(i.text)
+        return kpi_card
+
+    def market_breakdown(self, kpi):
+        self.driver.find(self.MARKET_BREAKDOWN.format(kpi)).click()
+        self.driver.wait_for_disappear(self.PROGRESSBAR)
+        # canvas = self.driver.find("//div[@data-testid='kpiMiniBarChart']/div/div/canvas")
+        self.driver.find(self.CLOSE_MARKETDOWN).click()
+
+    def click_on_market_share(self):
+        ui.CommonFunctionality(self.driver).click_on_market_share()
+
+    def close_overlay(self):
+        ui.CommonFunctionality(self.driver).close_filter()
+
+    def brand_header(self):
+        return ui.OverlayFunctionality(self.driver).brand_header()
+
+    def brand_kpi_cards(self):
+        return ui.OverlayFunctionality(self.driver).brand_kpi_cards()
+
+    def eye_button(self, kpi):
+        return ui.OverlayFunctionality(self.driver).eye_button(kpi)
+
+    def got_product_performance(self):
+        self.driver.scroll_down()
+        self.driver.click(self.GO_TO_PRODUCT_PERFORMANCE)
+        return ProductPerformance(self.driver).filters()
+
+    def explore_average_elasticity(self, position='Average Elasticity Index'):
+        ui.OverlayFunctionality(self.driver).competitive_position_link(position)
+        return ElasticityActionGrid(self.driver).filters()
+
+    def explore_promo_depth(self, position='Promo Depth'):
+        ui.OverlayFunctionality(self.driver).competitive_position_link(position)
+
+    def explore_promo_frequency(self, position='Promo Frequency'):
+        ui.OverlayFunctionality(self.driver).competitive_position_link(position)
+
+    def explore_advertising_spend(self, position='Advertising Spend'):
+        ui.OverlayFunctionality(self.driver).competitive_position_link(position)
+        return MediaSummary(self.driver).filters()
+
+    def overlay_download(self, file_type):
+        self.driver.click(self.CP_OVERLAY_TOP_BAR)
+        self.driver.click(self.OVERLAY_DOWNLOAD)
+        ui.OverlayFunctionality(self.driver).overlay_download(file_type)
+
+    def overlay_market_breakdown(self, kpi):
+        ui.OverlayFunctionality(self.driver).overlay_market_breakdown(kpi)

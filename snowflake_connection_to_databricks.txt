@@ -1,0 +1,123 @@
+step 1: Installing ''snowflake-connector-python[pandas]'' library using python
+
+%python
+%pip install snowflake-connector-python[pandas]
+
+
+step 2: Importing snowflake.connector library
+
+%python 
+import snowflake.connector
+
+
+step 3: Taking all the required options to connect the databricks with snowflake 
+
+%python 
+snowflake.options = {
+  "account" : "tmobilenpe.west-us-2.privatelink",
+  "user":"RSC_QAT_SNF_TFB_DI@T-MOBILE.COM",
+  "password":"ht.NqU1c.ZCpV3n3!STzc7OAs+pB#HrS",
+  "warehouse" : "CDW_TFB_DI_QAT_WH_01",
+  "database" : "CDW_SHMS_DB_QAT",
+  "database":"CDW_CORETFB_DB_QAT",
+  "schema":"SHMS_T",
+  "schema":"SHMS_HIST",
+  "schema":"SHMS_LATEST",
+  "role" : "RSC_QAT_SNF_TFB_DI_TMOBILE_NPE_RL"  
+  }
+  
+  
+  
+step 4: Using 'conn' variable we are connecting the options to 'snowflake.connector' library
+  
+%python 
+conn=snowflake.connector.connect(**snowflake.options)
+
+
+
+
+step 5: importing some required libraries for applying SQL queries.
+
+%python 
+import pandas as pd
+from pyspark.sql.functions import *
+from pyspark.sql import Row 
+from datetime import datetime
+
+
+
+
+step 6: Making parameterized widgets using databricks inbuilt function 'dbutils.widgets'
+
+dbutils.widgets.text("gold_tbl_name","")                                # for making box at top of notebook
+gold_tbl_name=dbutils.widgets.get("gold_tbl_name")                      # getting the input for the box
+print(f"gold_tbl_name: {gold_tbl_name}")                                # printing the input given
+
+dbutils.widgets.text("lt_gold_tbl_name","")
+lt_gold_tbl_name=dbutils.widgets.get("lt_gold_tbl_name")
+print(f"lt_gold_tbl_name: {lt_gold_tbl_name}")
+
+
+Few Validations:::
+
+cmd1:
+
+%python 
+#Silver-Gold_HIST curr_ind
+df3=pd.read_sql(f"select'{silver_tbl_name}' table_name, (select count(id) from stg_sfdc_db.SFDC_T.{silver_tbl_name} where curr_ind ='Y') cnt_y, (select count(distinct {gold_tbl_name}_ID) from cdw_coretfb_db.sfdc_hist.{gold_tbl_name}) tot_cnt, (select count(distinct {gold_tbl_name}_ID) from cdw_coretfb_db.sfdc_hist.{gold_tbl_name}) - (select count(id) from stg_sfdc_db.SFDC_T.{silver_tbl_name} where curr_ind ='Y') difference",conn)
+display(df3)
+
+cmd2:
+
+%python 
+#Silver-Gold_HIST curr_ind
+df3=pd.read_sql(f"select'{silver_tbl_name}' table_name, (select count(id) from stg_sfdc_db.SFDC_T.{silver_tbl_name} where curr_ind ='Y') cnt_y, (select count(distinct {gold_tbl_name}_ID) from cdw_coretfb_db.sfdc_hist.{gold_tbl_name}) tot_cnt, (select count(distinct {gold_tbl_name}_ID) from cdw_coretfb_db.sfdc_hist.{gold_tbl_name}) - (select count(id) from stg_sfdc_db.SFDC_T.{silver_tbl_name} where curr_ind ='Y') difference",conn)
+display(df3)
+
+cmd3:
+
+#gold_hist uniqueness check
+df5=pd.read_sql(f"Select '{gold_tbl_name}' table_name, count(*) record_count, count(distinct {gold_tbl_name}_id, md5_checksum, system_modstamp_ts) key_count,count(*)-count(distinct {gold_tbl_name}_id, md5_checksum, system_modstamp_ts)  difference from CDW_CORETFB_DB.SFDC_HIST.{gold_tbl_name} where system_modstamp_ts>='2023-01-01'",conn)
+display(df5)
+
+cmd4:
+
+#silver uniqueness checks
+df7=pd.read_sql(f"Select '{silver_tbl_name}' table_name, count(*) record_count, count(distinct id, md5_checksum, systemmodstamp) key_count,count(*)-count(distinct id, md5_checksum, systemmodstamp)  difference from stg_sfdc_db.SFDC_T.{silver_tbl_name} where systemmodstamp>='2023-01-01'",conn)
+display(df7)
+
+cmd5:
+
+#Dups in gold_hist
+df9=pd.read_sql(f"select '{gold_tbl_name}'table_name,count(*) from (select {gold_tbl_name}_id,md5_checksum,SYSTEM_MODSTAMP_TS,LOAD_DATE_TS, count(1) from CDW_CORETFB_DB.SFDC_HIST.{gold_tbl_name} group by {gold_tbl_name}_id, md5_checksum,SYSTEM_MODSTAMP_TS,LOAD_DATE_TS having count(*) > 1)",conn)
+display(df9)
+
+cmd6:
+
+#Null checks in gold_hist
+null=pd.read_sql(f"select '{gold_tbl_name}'Table_Name,count(*) as cnt from (select * from CDW_CORETFB_DB.SFDC_HIST.{gold_tbl_name} where EDM_{gold_tbl_name}_UID IS NULL or {gold_tbl_name}_ID is NULL or CURRENT_IND is null or MD5_CHECKSUM is null or SYSTEM_MODSTAMP_TS IS NULL or CREATED_DATETIME IS NULL or EFFECTIVE_START_DATE_TS IS NULL or EFFECTIVE_END_DATE_TS IS NULL)",conn)
+display(null)
+
+cmd7:
+
+#Null checks in gold_latest
+null=pd.read_sql(f"select '{gold_tbl_name}'Table_Name,count(*) as cnt from (select * from CDW_CORETFB_DB.SFDC_LATEST.{gold_tbl_name} where EDM_{gold_tbl_name}_UID IS NULL or {gold_tbl_name}_ID is NULL or  MD5_CHECKSUM is null or CREATED_DATETIME IS NULL or EFFECTIVE_START_DATE_TS IS NULL or EFFECTIVE_END_DATE_TS IS NULL)",conn)
+display(null)
+
+cmd8:
+
+#Dups in gold_latest
+df10=pd.read_sql(f"select '{gold_tbl_name}',count(*) from (select {gold_tbl_name}_id,md5_checksum,system_modstamp_ts,load_date_ts , count(1) from CDW_CORETFB_DB.SFDC_LATEST.{gold_tbl_name} group by {gold_tbl_name}_ID, md5_checksum,system_modstamp_ts,load_date_ts having count(*) > 1)",conn)
+display(df10)
+
+cmd9:
+
+#VALIDATE DIST ID COUNT = CURR_IND Y REC COUNT = LATEST RECORD AS CURR_IND Y COUNT(Silver)
+df11=pd.read_sql(f"SELECT '{silver_tbl_name}' Tablename,(SELECT COUNT(DISTINCT ID) FROM STG_SFDC_DB.SFDC_T.{silver_tbl_name}) tot_dist_id,(SELECT COUNT(ID) FROM STG_SFDC_DB.SFDC_T.{silver_tbl_name} WHERE CURR_IND = 'Y') tot_y,(SELECT COUNT(tgt.ID) FROM STG_SFDC_DB.SFDC_T.{silver_tbl_name} tgt JOIN(select * from (select id,md5_checksum,load_dttm,systemmodstamp,row_number() over (partition by id order by systemmodstamp desc nulls last,load_dttm desc nulls last) rn from STG_SFDC_DB.SFDC_T.{silver_tbl_name}) a where a.rn = 1)ltst ON tgt.id = ltst.id WHERE tgt.CURR_IND = 'Y' and tgt.md5_checksum = ltst.md5_checksum and tgt.systemmodstamp = ltst.systemmodstamp and tgt.load_dttm = ltst.load_dttm) tot_ltst_y,(tot_dist_id-tot_y) diff_dist_id_y,(tot_dist_id-tot_ltst_y) diff_dist_id_ltst_y",conn)
+display(df11)
+
+cmd10:
+
+#Null checks in silver
+null=pd.read_sql(f"select '{silver_tbl_name}'Table_Name,count(*) as cnt from (select * from stg_sfdc_db.sfdc_t.{silver_tbl_name} where ID is null or MD5_CHECKSUM is null or systemmodstamp is null or curr_ind is null or createddate is null or UPDATE_DTTM is null or LOAD_DTTM is null)",conn)
+display(null)
