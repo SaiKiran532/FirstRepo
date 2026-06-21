@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Salary Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      font-family: Arial;
+      background: #f4f6f9;
+      margin: 20px;
+      max-width: 600px;
+    }
+
+    h2 {
+      text-align: center;
+      color: #333;
+    }
+
+    select, input, button {
+      padding: 8px;
+      margin: 5px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      background: #4CAF50;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #45a049;
+    }
+
+    .total {
+      position: sticky;
+      top: 0;
+      background: #ffffff;
+      padding: 12px;
+      border-bottom: 3px solid #4CAF50;
+      font-size: 20px;
+      font-weight: bold;
+      z-index: 10;
+    }
+
+    #salaryList {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      padding: 10px;
+      border-radius: 10px;
+      background: white;
+    }
+
+    /* ✅ Styled Scrollbar */
+    #salaryList::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    #salaryList::-webkit-scrollbar-thumb {
+      background: #4CAF50;
+      border-radius: 10px;
+    }
+
+    li {
+      display: flex;
+      justify-content: space-between;
+      margin: 6px 0;
+      padding: 6px;
+      background: #f9f9f9;
+      border-radius: 6px;
+    }
+
+    .delete-btn {
+      color: red;
+      cursor: pointer;
+    }
+
+    .controls {
+      margin: 10px 0;
+    }
+
+    .view-toggle {
+      color: blue;
+      cursor: pointer;
+      margin-top: 5px;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+
+<h2>💰 Salary Dashboard</h2>
+
+<div class="total">
+  Total: ₹<span id="total">0</span>
+</div>
+
+<div class="controls">
+  <select id="monthInput">
+    <option value="">Month</option>
+    <option>Jan</option><option>Feb</option><option>Mar</option>
+    <option>Apr</option><option>May</option><option>Jun</option>
+    <option>Jul</option><option>Aug</option><option>Sep</option>
+    <option>Oct</option><option>Nov</option><option>Dec</option>
+  </select>
+
+  <select id="yearInput"></select>
+
+  <input type="number" id="salaryInput" placeholder="Salary" />
+
+  <button onclick="addSalary()">Add</button>
+</div>
+
+<!-- ✅ Filter -->
+<select id="filterYear" onchange="renderUI()">
+  <option value="">All Years</option>
+</select>
+
+<ul id="salaryList"></ul>
+
+<span class="view-toggle" onclick="toggleView()">View All</span>
+
+<!-- ✅ Chart -->
+<canvas id="salaryChart" height="200"></canvas>
+
+<script>
+  let salaries = JSON.parse(localStorage.getItem("salaries")) || [];
+  let showAll = false;
+  let chartInstance;
+
+  function populateYears() {
+    const yearDropdown = document.getElementById("yearInput");
+    const filterDropdown = document.getElementById("filterYear");
+
+    const currentYear = new Date().getFullYear();
+    const nextYear = currentYear + 1;
+
+    yearDropdown.innerHTML = '<option value="">Year</option>';
+    filterDropdown.innerHTML = '<option value="">All Years</option>';
+
+    for (let y = 2023; y <= nextYear; y++) {
+      yearDropdown.innerHTML += `<option>${y}</option>`;
+      filterDropdown.innerHTML += `<option>${y}</option>`;
+    }
+  }
+
+  function addSalary() {
+    const month = monthInput.value;
+    const year = yearInput.value;
+    const salary = Number(salaryInput.value);
+
+    if (!month || !year || salary <= 0) {
+      alert("Fill all fields correctly");
+      return;
+    }
+
+    salaries.push({ month, year, salary });
+
+    localStorage.setItem("salaries", JSON.stringify(salaries));
+    renderUI();
+
+    monthInput.value = "";
+    yearInput.value = "";
+    salaryInput.value = "";
+  }
+
+  function deleteSalary(index) {
+    salaries.splice(index, 1);
+    localStorage.setItem("salaries", JSON.stringify(salaries));
+    renderUI();
+  }
+
+  function toggleView() {
+    showAll = !showAll;
+    renderUI();
+  }
+
+  function renderUI() {
+    const list = document.getElementById("salaryList");
+    const totalEl = document.getElementById("total");
+    const filterYear = document.getElementById("filterYear").value;
+
+    list.innerHTML = "";
+
+    let filtered = salaries.filter(s =>
+      !filterYear || s.year == filterYear
+    );
+
+    let displayList = showAll ? filtered : filtered.slice(-5);
+
+    let total = 0;
+
+    displayList.forEach((item, index) => {
+      const li = document.createElement("li");
+
+      li.innerHTML = `
+        ${item.month} ${item.year} - ₹${item.salary}
+        <span class="delete-btn" onclick="deleteSalary(${salaries.indexOf(item)})">❌</span>
+      `;
+
+      list.appendChild(li);
+    });
+
+    salaries.forEach(s => total += s.salary);
+    totalEl.textContent = total;
+
+    document.querySelector(".view-toggle").textContent =
+      showAll ? "Show Less" : "View All";
+
+    renderChart(filtered);
+  }
+
+  function renderChart(data) {
+    const ctx = document.getElementById("salaryChart");
+
+    const labels = data.map(d => d.month + " " + d.year);
+    const values = data.map(d => d.salary);
+
+    if (chartInstance) chartInstance.destroy();
+
+    chartInstance = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{
+          label: "Salary",
+          data: values,
+          backgroundColor: "#4CAF50"
+        }]
+      }
+    });
+  }
+
+  populateYears();
+  renderUI();
+</script>
+
+</body>
+</html>
